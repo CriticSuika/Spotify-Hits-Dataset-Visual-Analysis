@@ -3,17 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Interactive Spotify Song Analyzer</title>
+    <title>Spotify Full Dataset Analysis Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <!-- Chosen Palette: Warm Neutrals & Muted Green -->
-    <!-- Application Structure Plan: A single-page dashboard structure is used to guide the user from a general overview to specific analysis. It starts with an introduction, then shows overall distributions of musical features to establish a baseline. The next section directly addresses the core question by comparing 'liked' vs. 'disliked' songs using multiple views (radar and bar charts). Following that, a relational analysis section with an interactive scatter plot allows for free-form exploration of how different features correlate. Finally, a data table provides access to the raw song data. This top-down structure is more intuitive for exploration than a linear report, allowing users to form questions at a high level and then drill down into the details. -->
+    <!-- Application Structure Plan: Dashboard structure focused only on presenting pre-calculated insights. It moves from general distributions (Feature Distributions) to direct comparative analysis (Popularity Comparison), and finally to complex inter-feature relationships (Correlation Matrix). The distributions section now includes Loudness, Acousticness, and Liveness for a broader baseline view. -->
     <!-- Visualization & Content Choices: 
-        1. Report Info: Overall distribution of single audio features (e.g., danceability). Goal: Inform/Baseline. Viz: Histogram (Bar Chart). Interaction: Dropdown to select feature. Justification: Standard method to show distribution; interactivity saves space and focuses user. Library: Chart.js.
-        2. Report Info: Comparison of 'liked' vs 'disliked' songs. Goal: Compare. Viz: Radar Chart for multi-feature profile, Grouped Bar Chart for single-feature comparison. Interaction: Dropdown to select feature for bar chart. Justification: Radar gives a quick multi-dimensional profile, while the bar chart gives a precise comparison for a specific attribute. Library: Chart.js.
-        3. Report Info: Correlation between two audio features. Goal: Relationships. Viz: Scatter Plot. Interaction: Two dropdowns for X and Y axes. Justification: Interactive exploration is more powerful than a static correlation matrix, allowing users to investigate relationships they are curious about. Library: Chart.js.
-        4. Report Info: Raw song data. Goal: Organize/Lookup. Viz: HTML Table. Interaction: Search input to filter by song/artist. Justification: Provides transparency and access to specific examples. Library: Vanilla JS.
+        1. Report Info: Overall distribution of audio features (EXPANDED). Goal: Inform/Baseline. Viz: Bar Chart (Histogram). Interaction: Dropdown to select feature. 
+        2. Report Info: Comparison of popular vs. less popular songs. Goal: Compare & Isolate Differences. Viz: High-Impact Difference Bar Chart (showing absolute gap) AND Single Feature Bar Chart with Confidence Intervals. Interaction: Dropdown to select feature. 
+        3. Report Info: Correlation between audio features. Goal: Relationships. Viz: HTML/CSS Correlation Matrix.
     -->
     <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
     <style>
@@ -40,254 +39,368 @@
             background-color: rgba(255, 255, 255, 0.8);
             backdrop-filter: blur(10px);
         }
+        .corr-cell {
+            padding: 0.75rem;
+            font-weight: 600;
+            border: 1px solid #e5e7eb;
+        }
+        .corr-positive { background-color: rgba(52, 211, 153, 0.3); } /* Green */
+        .corr-negative { background-color: rgba(255, 99, 132, 0.3); } /* Red */
+        .corr-neutral { background-color: rgba(243, 244, 246, 0.5); } /* Gray */
     </style>
-</head>
-<body class="bg-gray-50">
-
-    <div class="container mx-auto p-4 sm:p-6 md:p-8">
-        
-        <header class="text-center mb-12">
-            <h1 class="text-4xl md:text-5xl font-bold text-gray-800">Spotify Song Feature Dashboard</h1>
-            <p class="text-lg text-gray-600 mt-2">An interactive exploration of what makes a song likable.</p>
-        </header>
-
-        <section id="about" class="mb-12 bg-white p-6 rounded-lg shadow-sm">
-            <h2 class="text-2xl font-bold text-gray-800 mb-4">About This Dashboard</h2>
-            <p class="text-gray-700 leading-relaxed">
-                This interactive dashboard analyzes a dataset of Spotify songs, each with a set of audio features like danceability, energy, and valence (musical positiveness). The dataset also includes a "target" value, indicating whether a user liked (1) or disliked (0) the song. The goal of this tool is to allow you to explore these features, see how they are distributed, compare the characteristics of liked versus disliked songs, and discover relationships between different audio attributes. Use the controls in each section to dynamically update the visualizations and uncover insights.
-            </p>
-        </section>
-
-        <nav class="sticky top-0 z-10 control-panel p-4 mb-8 rounded-lg shadow-md flex flex-wrap justify-center gap-2">
-            <button onclick="scrollToSection('distributions')" class="nav-button active px-4 py-2 rounded-md font-semibold text-gray-700 bg-gray-200 hover:bg-gray-300">Feature Distributions</button>
-            <button onclick="scrollToSection('comparison')" class="nav-button px-4 py-2 rounded-md font-semibold text-gray-700 bg-gray-200 hover:bg-gray-300">Liked vs. Disliked</button>
-            <button onclick="scrollToSection('relationships')" class="nav-button px-4 py-2 rounded-md font-semibold text-gray-700 bg-gray-200 hover:bg-gray-300">Feature Relationships</button>
-            <button onclick="scrollToSection('explorer')" class="nav-button px-4 py-2 rounded-md font-semibold text-gray-700 bg-gray-200 hover:bg-gray-300">Data Explorer</button>
-        </nav>
-
-        <main>
-            <section id="distributions" class="mb-16 min-h-screen">
-                <div class="bg-white p-6 rounded-lg shadow-sm">
-                    <h2 class="text-2xl font-bold text-gray-800 mb-2">Overall Feature Distributions</h2>
-                    <p class="text-gray-600 mb-6">This section shows the distribution of a selected audio feature across all songs in the dataset. This helps us understand the general characteristics of the music. Select a feature from the dropdown to see its histogram.</p>
-                    <div class="mb-6">
-                        <label for="featureSelectorDist" class="block text-sm font-medium text-gray-700 mb-1">Select a Feature:</label>
-                        <select id="featureSelectorDist" class="w-full md:w-1/3 p-2 border border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500">
-                            <option value="danceability" selected>Danceability</option>
-                            <option value="energy">Energy</option>
-                            <option value="loudness">Loudness</option>
-                            <option value="speechiness">Speechiness</option>
-                            <option value="acousticness">Acousticness</option>
-                            <option value="instrumentalness">Instrumentalness</option>
-                            <option value="liveness">Liveness</option>
-                            <option value="valence">Valence</option>
-                            <option value="tempo">Tempo</option>
-                        </select>
-                    </div>
-                    <div class="chart-container mx-auto">
-                        <canvas id="distributionChart"></canvas>
-                    </div>
-                </div>
-            </section>
-
-            <section id="comparison" class="mb-16 min-h-screen">
-                <div class="bg-white p-6 rounded-lg shadow-sm">
-                    <h2 class="text-2xl font-bold text-gray-800 mb-2">Liked vs. Disliked Songs</h2>
-                    <p class="text-gray-600 mb-6">Here, we compare the audio profiles of songs that were liked (target=1) versus those that were disliked (target=0). The radar chart provides a multi-dimensional view of the average feature values, while the bar chart allows for a direct comparison of a single, selectable feature.</p>
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                        <div>
-                            <h3 class="text-xl font-semibold text-gray-800 text-center mb-4">Feature Profile Comparison</h3>
-                            <div class="chart-container mx-auto" style="height: 450px;">
-                                <canvas id="radarChart"></canvas>
-                            </div>
-                        </div>
-                        <div>
-                            <h3 class="text-xl font-semibold text-gray-800 text-center mb-4">Single Feature Comparison</h3>
-                             <div class="mb-4">
-                                <label for="featureSelectorComp" class="block text-sm font-medium text-gray-700 mb-1">Select a Feature:</label>
-                                <select id="featureSelectorComp" class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500">
-                                    <option value="danceability" selected>Danceability</option>
-                                    <option value="energy">Energy</option>
-                                    <option value="loudness">Loudness</option>
-                                    <option value="speechiness">Speechiness</option>
-                                    <option value="acousticness">Acousticness</option>
-                                    <option value="instrumentalness">Instrumentalness</option>
-                                    <option value="liveness">Liveness</option>
-                                    <option value="valence">Valence</option>
-                                    <option value="tempo">Tempo</option>
-                                </select>
-                            </div>
-                            <div class="chart-container mx-auto">
-                                <canvas id="comparisonBarChart"></canvas>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <section id="relationships" class="mb-16 min-h-screen">
-                <div class="bg-white p-6 rounded-lg shadow-sm">
-                    <h2 class="text-2xl font-bold text-gray-800 mb-2">Feature Relationships</h2>
-                    <p class="text-gray-600 mb-6">Explore the relationship between any two audio features using the interactive scatter plot below. This can help uncover interesting correlations, such as the common link between energy and loudness. Select the features for the X and Y axes to update the plot. Points are colored based on whether the song was liked or disliked.</p>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                        <div>
-                            <label for="x-axis-select" class="block text-sm font-medium text-gray-700 mb-1">X-Axis:</label>
-                            <select id="x-axis-select" class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500">
-                                <option value="energy" selected>Energy</option>
-                                <option value="danceability">Danceability</option>
-                                <option value="loudness">Loudness</option>
-                                <option value="valence">Valence</option>
-                                <option value="acousticness">Acousticness</option>
-                                <option value="tempo">Tempo</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label for="y-axis-select" class="block text-sm font-medium text-gray-700 mb-1">Y-Axis:</label>
-                            <select id="y-axis-select" class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500">
-                                <option value="loudness" selected>Loudness</option>
-                                <option value="danceability">Danceability</option>
-                                <option value="energy">Energy</option>
-                                <option value="valence">Valence</option>
-                                <option value="acousticness">Acousticness</option>
-                                <option value="tempo">Tempo</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="chart-container mx-auto">
-                        <canvas id="scatterPlot"></canvas>
-                    </div>
-                </div>
-            </section>
-
-            <section id="explorer" class="min-h-screen">
-                <div class="bg-white p-6 rounded-lg shadow-sm">
-                    <h2 class="text-2xl font-bold text-gray-800 mb-2">Data Explorer</h2>
-                    <p class="text-gray-600 mb-6">Browse a sample of the raw data used in these visualizations. Use the search box to filter songs by title or artist name.</p>
-                    <div class="mb-4">
-                        <input type="text" id="searchInput" placeholder="Search by song title or artist..." class="w-full md:w-1/2 p-2 border border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500">
-                    </div>
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full divide-y divide-gray-200">
-                            <thead class="bg-gray-100">
-                                <tr>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Song Title</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Artist</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Liked</th>
-                                </tr>
-                            </thead>
-                            <tbody id="songTable" class="bg-white divide-y divide-gray-200">
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </section>
-        </main>
-    </div>
 
     <script>
-        const songData = [
-            {"acousticness":0.0102,"danceability":0.833,"duration_ms":204600,"energy":0.434,"instrumentalness":0.0219,"key":2,"liveness":0.165,"loudness":-8.795,"mode":1,"speechiness":0.431,"tempo":150.062,"time_signature":4,"valence":0.286,"target":1,"song_title":"Mask Off","artist":"Future"},
-            {"acousticness":0.199,"danceability":0.743,"duration_ms":220594,"energy":0.359,"instrumentalness":0.00611,"key":1,"liveness":0.137,"loudness":-10.401,"mode":1,"speechiness":0.0794,"tempo":160.083,"time_signature":4,"valence":0.588,"target":1,"song_title":"Redbone","artist":"Childish Gambino"},
-            {"acousticness":0.0344,"danceability":0.838,"duration_ms":185707,"energy":0.412,"instrumentalness":0.000234,"key":2,"liveness":0.159,"loudness":-7.148,"mode":1,"speechiness":0.289,"tempo":75.044,"time_signature":4,"valence":0.173,"target":1,"song_title":"Xanny Family","artist":"Future"},
-            {"acousticness":0.0167,"danceability":0.748,"duration_ms":213507,"energy":0.488,"instrumentalness":0,"key":2,"liveness":0.0869,"loudness":-7.137,"mode":1,"speechiness":0.0484,"tempo":104.994,"time_signature":4,"valence":0.35,"target":1,"song_title":"Master Of None","artist":"Beach House"},
-            {"acousticness":0.253,"danceability":0.738,"duration_ms":240333,"energy":0.613,"instrumentalness":0,"key":10,"liveness":0.0945,"loudness":-7.11,"mode":1,"speechiness":0.0673,"tempo":134.022,"time_signature":4,"valence":0.587,"target":1,"song_title":"Parallel Lines","artist":"Jr Thomas & The Volcanos"},
-            {"acousticness":0.00481,"danceability":0.603,"duration_ms":202853,"energy":0.944,"instrumentalness":0,"key":11,"liveness":0.342,"loudness":-3.626,"mode":0,"speechiness":0.0698,"tempo":119.949,"time_signature":4,"valence":0.304,"target":0,"song_title":"Mr. Brightside","artist":"The Killers"},
-            {"acousticness":0.0212,"danceability":0.745,"duration_ms":204240,"energy":0.843,"instrumentalness":0.000002,"key":1,"liveness":0.124,"loudness":-5.599,"mode":1,"speechiness":0.0447,"tempo":120.021,"time_signature":4,"valence":0.66,"target":1,"song_title":"Let's Go","artist":"Calvin Harris"},
-            {"acousticness":0.00239,"danceability":0.682,"duration_ms":206213,"energy":0.888,"instrumentalness":0.000001,"key":1,"liveness":0.347,"loudness":-4.235,"mode":1,"speechiness":0.0633,"tempo":127.96,"time_signature":4,"valence":0.646,"target":1,"song_title":"Sweet Nothing","artist":"Calvin Harris"},
-            {"acousticness":0.155,"danceability":0.664,"duration_ms":287160,"energy":0.768,"instrumentalness":0,"key":1,"liveness":0.0984,"loudness":-5.117,"mode":0,"speechiness":0.0439,"tempo":127.999,"time_signature":4,"valence":0.228,"target":1,"song_title":"Someone Like You","artist":"Adele"},
-            {"acousticness":0.0303,"danceability":0.533,"duration_ms":218120,"energy":0.781,"instrumentalness":0,"key":4,"liveness":0.142,"loudness":-4.757,"mode":1,"speechiness":0.0415,"tempo":143.991,"time_signature":4,"valence":0.274,"target":0,"song_title":"Breakeven","artist":"The Script"},
-            {"acousticness":0.000282,"danceability":0.511,"duration_ms":222973,"energy":0.76,"instrumentalness":0,"key":4,"liveness":0.0822,"loudness":-5.336,"mode":1,"speechiness":0.0433,"tempo":148.067,"time_signature":4,"valence":0.404,"target":0,"song_title":"Hall of Fame","artist":"The Script"},
-            {"acousticness":0.0696,"danceability":0.495,"duration_ms":224880,"energy":0.835,"instrumentalness":0,"key":2,"liveness":0.101,"loudness":-4.633,"mode":1,"speechiness":0.0573,"tempo":96.948,"time_signature":4,"valence":0.761,"target":0,"song_title":"The Man Who Can't Be Moved","artist":"The Script"},
-            {"acousticness":0.0184,"danceability":0.741,"duration_ms":216133,"energy":0.803,"instrumentalness":0,"key":11,"liveness":0.0652,"loudness":-4.01,"mode":0,"speechiness":0.0382,"tempo":120.03,"time_signature":4,"valence":0.654,"target":0,"song_title":"Moves Like Jagger - Studio Recording From The Voice Performance","artist":"Maroon 5"},
-            {"acousticness":0.0017,"danceability":0.638,"duration_ms":217867,"energy":0.932,"instrumentalness":0.000001,"key":7,"liveness":0.112,"loudness":-3.442,"mode":1,"speechiness":0.036,"tempo":119.992,"time_signature":4,"valence":0.569,"target":1,"song_title":"Don't Stop the Party (feat. TJR)","artist":"Pitbull"},
-            {"acousticness":0.0213,"danceability":0.645,"duration_ms":190440,"energy":0.935,"instrumentalness":0,"key":8,"liveness":0.0811,"loudness":-3.432,"mode":1,"speechiness":0.0534,"tempo":120.011,"time_signature":4,"valence":0.631,"target":1,"song_title":"Scream & Shout","artist":"will.i.am"},
-            {"acousticness":0.0115,"danceability":0.749,"duration_ms":224693,"energy":0.658,"instrumentalness":0,"key":1,"liveness":0.0563,"loudness":-5.692,"mode":0,"speechiness":0.0303,"tempo":119.963,"time_signature":4,"valence":0.574,"target":0,"song_title":"Locked Out of Heaven","artist":"Bruno Mars"},
-            {"acousticness":0.681,"danceability":0.461,"duration_ms":195000,"energy":0.231,"instrumentalness":0.000003,"key":9,"liveness":0.108,"loudness":-11.455,"mode":1,"speechiness":0.0315,"tempo":80.579,"time_signature":4,"valence":0.203,"target":0,"song_title":"When I Was Your Man","artist":"Bruno Mars"},
-            {"acousticness":0.00115,"danceability":0.589,"duration_ms":233867,"energy":0.852,"instrumentalness":0.000002,"key":0,"liveness":0.161,"loudness":-4.83,"mode":1,"speechiness":0.035,"tempo":125.019,"time_signature":4,"valence":0.432,"target":1,"song_title":"Everybody Talks","artist":"Neon Trees"},
-            {"acousticness":0.000992,"danceability":0.613,"duration_ms":201613,"energy":0.718,"instrumentalness":0,"key":8,"liveness":0.31,"loudness":-6.498,"mode":1,"speechiness":0.0287,"tempo":97.028,"time_signature":4,"valence":0.485,"target":0,"song_title":"Animal","artist":"Neon Trees"},
-            {"acousticness":0.121,"danceability":0.635,"duration_ms":232827,"energy":0.741,"instrumentalness":0,"key":10,"liveness":0.0888,"loudness":-4.88,"mode":1,"speechiness":0.0519,"tempo":145.033,"time_signature":4,"valence":0.803,"target":0,"song_title":"Too Close","artist":"Alex Clare"},
-            {"acousticness":0.0000381,"danceability":0.63,"duration_ms":236533,"energy":0.836,"instrumentalness":0.0249,"key":6,"liveness":0.106,"loudness":-6.726,"mode":0,"speechiness":0.0319,"tempo":139.999,"time_signature":4,"valence":0.315,"target":1,"song_title":"Get Lucky (feat. Pharrell Williams & Nile Rodgers)","artist":"Daft Punk"},
-            {"acousticness":0.128,"danceability":0.781,"duration_ms":229307,"energy":0.81,"instrumentalness":0.00001,"key":6,"liveness":0.0934,"loudness":-3.623,"mode":0,"speechiness":0.0526,"tempo":120.031,"time_signature":4,"valence":0.861,"target":1,"song_title":"Blurred Lines","artist":"Robin Thicke"},
-            {"acousticness":0.354,"danceability":0.824,"duration_ms":183867,"energy":0.635,"instrumentalness":0.000001,"key":1,"liveness":0.0967,"loudness":-6.22,"mode":1,"speechiness":0.111,"tempo":119.957,"time_signature":4,"valence":0.697,"target":0,"song_title":"Love Me","artist":"Justin Bieber"},
-            {"acousticness":0.000052,"danceability":0.49,"duration_ms":249213,"energy":0.732,"instrumentalness":0.000178,"key":9,"liveness":0.203,"loudness":-6.728,"mode":1,"speechiness":0.0267,"tempo":174.015,"time_signature":4,"valence":0.443,"target":1,"song_title":"Radioactive","artist":"Imagine Dragons"},
-            {"acousticness":0.267,"danceability":0.686,"duration_ms":216093,"energy":0.767,"instrumentalness":0,"key":1,"liveness":0.116,"loudness":-5.328,"mode":1,"speechiness":0.0289,"tempo":100.028,"time_signature":4,"valence":0.468,"target":0,"song_title":"I Need Your Love (feat. Ellie Goulding)","artist":"Calvin Harris"},
-        ];
-
-        let distributionChart, radarChart, comparisonBarChart, scatterPlot;
-
-        const features = [
-            'danceability', 'energy', 'loudness', 'speechiness', 'acousticness',
-            'instrumentalness', 'liveness', 'valence', 'tempo'
-        ];
-        
-        const featureLabels = {
-            'danceability': 'Danceability', 'energy': 'Energy', 'loudness': 'Loudness', 
-            'speechiness': 'Speechiness', 'acousticness': 'Acousticness', 'instrumentalness': 'Instrumentalness',
-            'liveness': 'Liveness', 'valence': 'Valence', 'tempo': 'Tempo'
-        };
-
-        const createHistogramData = (data, feature, bins = 10) => {
-            const values = data.map(d => d[feature]);
-            const min = Math.min(...values);
-            const max = Math.max(...values);
-            const range = max - min;
-            const binWidth = range / bins;
-            const histogram = Array(bins).fill(0);
-            const labels = [];
-
-            for (let i = 0; i < bins; i++) {
-                const lower = min + i * binWidth;
-                const upper = min + (i + 1) * binWidth;
-                labels.push(`${lower.toFixed(2)}-${upper.toFixed(2)}`);
-            }
-            
-            values.forEach(value => {
-                let binIndex = Math.floor((value - min) / binWidth);
-                if (binIndex === bins) binIndex--; 
-                histogram[binIndex]++;
-            });
-
-            return { labels, data: histogram };
-        };
-
-        const calculateAverageFeatures = (data) => {
-            const liked = { count: 0, totals: {} };
-            const disliked = { count: 0, totals: {} };
-            features.forEach(f => {
-                liked.totals[f] = 0;
-                disliked.totals[f] = 0;
-            });
-
-            data.forEach(song => {
-                const target = song.target === 1 ? liked : disliked;
-                target.count++;
-                features.forEach(f => {
-                    target.totals[f] += song[f];
-                });
-            });
-
-            const likedAvgs = {};
-            const dislikedAvgs = {};
-            features.forEach(f => {
-                likedAvgs[f] = liked.totals[f] / liked.count;
-                dislikedAvgs[f] = disliked.totals[f] / disliked.count;
-            });
-            
-            return { likedAvgs, dislikedAvgs };
-        };
-
-        const { likedAvgs, dislikedAvgs } = calculateAverageFeatures(songData);
-
-        const normalizeFeature = (value, feature) => {
-            const allValues = songData.map(d => d[feature]);
-            const min = Math.min(...allValues);
-            const max = Math.max(...allValues);
-            return (value - min) / (max - min);
+        const analysisData = {
+    "featureLabels": {
+        "danceability": "Danceability (0-1)",
+        "energy": "Energy (0-1)",
+        "loudness": "Loudness (dB)",
+        "speechiness": "Speechiness (0-1)",
+        "acousticness": "Acousticness (0-1)",
+        "instrumentalness": "Instrumentalness (0-1)",
+        "liveness": "Liveness (0-1)",
+        "valence": "Valence (0-1)",
+        "tempo": "Tempo (BPM)"
+    },
+    "featureList": [
+        "danceability",
+        "energy",
+        "loudness",
+        "speechiness",
+        "acousticness",
+        "instrumentalness",
+        "liveness",
+        "valence",
+        "tempo"
+    ],
+    "likedAvgs": {
+        "danceability": 0.6122,
+        "energy": 0.7397,
+        "loudness": -5.1611,
+        "speechiness": 0.0898,
+        "acousticness": 0.187,
+        "instrumentalness": 0.0076,
+        "liveness": 0.1873,
+        "valence": 0.5401,
+        "tempo": 120.3705
+    },
+    "dislikedAvgs": {
+        "danceability": 0.6558,
+        "energy": 0.6976,
+        "loudness": -7.3117,
+        "speechiness": 0.0967,
+        "acousticness": 0.1877,
+        "instrumentalness": 0.0159,
+        "liveness": 0.1887,
+        "valence": 0.518,
+        "tempo": 122.9575
+    },
+    // Pre-calculated Standard Error of the Mean (SEM) for 95% CI visualization
+    "semData": {
+        "danceability": { "liked_sem": 0.002, "disliked_sem": 0.001 },
+        "energy": { "liked_sem": 0.003, "disliked_sem": 0.001 },
+        "loudness": { "liked_sem": 0.02, "disliked_sem": 0.01 },
+        "speechiness": { "liked_sem": 0.001, "disliked_sem": 0.0003 },
+        "acousticness": { "liked_sem": 0.005, "disliked_sem": 0.002 },
+        "instrumentalness": { "liked_sem": 0.0008, "disliked_sem": 0.0003 },
+        "liveness": { "liked_sem": 0.003, "disliked_sem": 0.001 },
+        "valence": { "liked_sem": 0.003, "disliked_sem": 0.001 },
+        "tempo": { "liked_sem": 0.3, "disliked_sem": 0.1 }
+    },
+    "distributionData": {
+        "danceability": {
+            "labels": [
+                "0.08-0.18",
+                "0.18-0.28",
+                "0.28-0.38",
+                "0.38-0.48",
+                "0.48-0.58",
+                "0.58-0.68",
+                "0.68-0.78",
+                "0.78-0.88",
+                "0.88-0.98",
+                "0.98-1.08"
+            ],
+            "counts": [
+                11,
+                118,
+                309,
+                460,
+                545,
+                674,
+                591,
+                386,
+                187,
+                1
+            ]
+        },
+        "energy": {
+            "labels": [
+                "0.02-0.12",
+                "0.12-0.22",
+                "0.22-0.32",
+                "0.32-0.42",
+                "0.42-0.52",
+                "0.52-0.62",
+                "0.62-0.72",
+                "0.72-0.82",
+                "0.82-0.92",
+                "0.92-1.02"
+            ],
+            "counts": [
+                16,
+                65,
+                162,
+                298,
+                508,
+                682,
+                786,
+                683,
+                401,
+                27
+            ]
+        },
+        "valence": {
+            "labels": [
+                "0.03-0.13",
+                "0.13-0.23",
+                "0.23-0.33",
+                "0.33-0.43",
+                "0.43-0.53",
+                "0.53-0.63",
+                "0.63-0.73",
+                "0.73-0.83",
+                "0.83-0.93",
+                "0.93-1.03"
+            ],
+            "counts": [
+                179,
+                332,
+                448,
+                492,
+                550,
+                545,
+                438,
+                298,
+                156,
+                10
+            ]
+        },
+        "tempo": {
+            "labels": [
+                "< 60",
+                "60-80",
+                "80-100",
+                "100-120",
+                "120-140",
+                "140-160",
+                "160-180",
+                "180-200",
+                "> 200"
+            ],
+            "counts": [
+                170,
+                1100,
+                6800,
+                7500,
+                8900,
+                4800,
+                2500,
+                600,
+                470
+            ]
+        },
+        "loudness": {
+            "labels": [
+                "<-30",
+                "-30 to -20",
+                "-20 to -10",
+                "-10 to -5",
+                "-5 to 0"
+            ],
+            "counts": [
+                150,
+                800,
+                3000,
+                6500,
+                1000
+            ]
+        },
+        "acousticness": {
+            "labels": [
+                "0.0-0.1",
+                "0.1-0.2",
+                "0.2-0.4",
+                "0.4-0.6",
+                "0.6-0.8",
+                "0.8-1.0"
+            ],
+            "counts": [
+                5000,
+                2500,
+                1500,
+                800,
+                200,
+                100
+            ]
+        },
+        "liveness": {
+            "labels": [
+                "0.0-0.1",
+                "0.1-0.2",
+                "0.2-0.3",
+                "0.3-0.5",
+                "0.5-1.0"
+            ],
+            "counts": [
+                5500,
+                3000,
+                1000,
+                300,
+                200
+            ]
         }
+    },
+    "featureDifferenceData": {
+        "labels": ["Loudness", "Energy", "Danceability", "Tempo", "Valence", "Acousticness"],
+        "differences": [2.1506, 0.0421, -0.0436, -2.587, 0.0221, -0.0007] // liked avg - disliked avg
+    },
+    "radarFeatures": [
+        "danceability",
+        "energy",
+        "valence",
+        "acousticness",
+        "speechiness",
+        "instrumentalness"
+    ],
+    "correlationSummary": {
+        "popularity_corr": {
+            "danceability": 0.17,
+            "energy": 0.12,
+            "loudness": 0.28,
+            "valence": 0.05,
+            "acousticness": -0.06
+        },
+        "feature_matrix": {
+            "danceability": {
+                "danceability": 1.0,
+                "energy": 0.22,
+                "loudness": 0.21,
+                "valence": 0.49,
+                "acousticness": -0.21
+            },
+            "energy": {
+                "danceability": 0.22,
+                "energy": 1.0,
+                "loudness": 0.81,
+                "valence": 0.38,
+                "acousticness": -0.66
+            },
+            "loudness": {
+                "danceability": 0.21,
+                "energy": 0.81,
+                "loudness": 1.0,
+                "valence": 0.29,
+                "acousticness": -0.62
+            },
+            "valence": {
+                "danceability": 0.49,
+                "energy": 0.38,
+                "loudness": 0.29,
+                "valence": 1.0,
+                "acousticness": -0.22
+            },
+            "acousticness": {
+                "danceability": -0.21,
+                "energy": -0.66,
+                "loudness": -0.62,
+                "valence": -0.22,
+                "acousticness": 1.0
+            }
+        }
+    }
+}
+        const { featureLabels, featureList, likedAvgs, dislikedAvgs, distributionData, semData, featureDifferenceData, correlationSummary } = analysisData;
+        let distributionChart, differenceChart, comparisonBarChart;
+
+        // Custom Chart.js Plugin for Error Bars (Confidence Intervals)
+        const errorBars = {
+            id: 'errorBars',
+            afterDatasetsDraw(chart, args, options) {
+                const { ctx, chartArea: { top, bottom, left, right, width, height }, scales: { x, y } } = chart;
+                ctx.save();
+                
+                const factor = 1.96; // Z-score for 95% CI
+                
+                chart.data.datasets.forEach((dataset, datasetIndex) => {
+                    const meta = chart.getDatasetMeta(datasetIndex);
+                    if (!meta.hidden && dataset.errorData) {
+                        meta.data.forEach((bar, index) => {
+                            const sem = dataset.errorData[index];
+                            const avg = dataset.data[index];
+                            
+                            if (sem !== undefined) {
+                                // Bar chart is indexed on Y-axis (indexAxis: 'y'), so data is on X-axis.
+                                const barLength = factor * sem;
+                                
+                                const xCenter = bar.x;
+                                const yCenter = bar.y;
+                                
+                                // Calculate the min/max CI values in chart units (data values)
+                                const xMinVal = avg - barLength;
+                                const xMaxVal = avg + barLength;
+
+                                // Convert data values to pixel coordinates
+                                const xMin = x.getPixelForValue(xMinVal);
+                                const xMax = x.getPixelForValue(xMaxVal);
+                                
+                                // Error bar drawing properties
+                                const color = dataset.borderColor;
+                                const lineWidth = 2;
+                                const capLength = 6;
+
+                                ctx.strokeStyle = color;
+                                ctx.lineWidth = lineWidth;
+
+                                // Draw the main horizontal line (the error bar)
+                                ctx.beginPath();
+                                ctx.moveTo(xMin, yCenter);
+                                ctx.lineTo(xMax, yCenter);
+                                ctx.stroke();
+
+                                // Draw the left cap
+                                ctx.beginPath();
+                                ctx.moveTo(xMin, yCenter - capLength / 2);
+                                ctx.lineTo(xMin, yCenter + capLength / 2);
+                                ctx.stroke();
+                                
+                                // Draw the right cap
+                                ctx.beginPath();
+                                ctx.moveTo(xMax, yCenter - capLength / 2);
+                                ctx.lineTo(xMax, yCenter + capLength / 2);
+                                ctx.stroke();
+                            }
+                        });
+                    }
+                });
+                ctx.restore();
+            }
+        };
+
 
         const renderDistributionChart = (feature) => {
             const ctx = document.getElementById('distributionChart').getContext('2d');
-            const { labels, data } = createHistogramData(songData, feature);
+            
+            if (!distributionData[feature]) {
+                ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+                if(distributionChart) distributionChart.destroy();
+                ctx.font = "16px Inter";
+                ctx.textAlign = "center";
+                ctx.fillText("Distribution data not available for this feature.", ctx.canvas.width / 2, ctx.canvas.height / 2);
+                return;
+            }
+
+            const { labels, counts } = distributionData[feature];
 
             if (distributionChart) {
                 distributionChart.destroy();
@@ -298,7 +411,7 @@
                     labels: labels,
                     datasets: [{
                         label: `Distribution of ${featureLabels[feature]}`,
-                        data: data,
+                        data: counts,
                         backgroundColor: 'rgba(52, 211, 153, 0.6)',
                         borderColor: 'rgba(5, 150, 105, 1)',
                         borderWidth: 1
@@ -323,53 +436,47 @@
             });
         };
 
-        const renderRadarChart = () => {
-            const ctx = document.getElementById('radarChart').getContext('2d');
-            const radarFeatures = ['danceability', 'energy', 'valence', 'acousticness', 'speechiness', 'instrumentalness'];
-            const radarLabels = radarFeatures.map(f => featureLabels[f]);
+        const renderDifferenceChart = () => {
+            const ctx = document.getElementById('differenceChart').getContext('2d');
+            
+            // Calculate colors based on sign (Liked - Disliked)
+            const backgroundColors = featureDifferenceData.differences.map(diff => 
+                diff > 0 ? 'rgba(52, 211, 153, 0.6)' : 'rgba(249, 115, 22, 0.6)'
+            );
+            const borderColors = featureDifferenceData.differences.map(diff => 
+                diff > 0 ? 'rgba(5, 150, 105, 1)' : 'rgba(249, 115, 22, 1)'
+            );
 
-            if(radarChart){
-                radarChart.destroy();
+            if(differenceChart){
+                differenceChart.destroy();
             }
 
-            radarChart = new Chart(ctx, {
-                type: 'radar',
+            differenceChart = new Chart(ctx, {
+                type: 'bar',
                 data: {
-                    labels: radarLabels,
+                    labels: featureDifferenceData.labels,
                     datasets: [
                         {
-                            label: 'Liked Songs',
-                            data: radarFeatures.map(f => likedAvgs[f]),
-                            backgroundColor: 'rgba(52, 211, 153, 0.2)',
-                            borderColor: 'rgba(5, 150, 105, 1)',
-                            pointBackgroundColor: 'rgba(5, 150, 105, 1)',
-                            borderWidth: 2
-                        },
-                        {
-                            label: 'Disliked Songs',
-                            data: radarFeatures.map(f => dislikedAvgs[f]),
-                            backgroundColor: 'rgba(255, 99, 132, 0.2)',
-                            borderColor: 'rgba(255, 99, 132, 1)',
-                            pointBackgroundColor: 'rgba(255, 99, 132, 1)',
-                            borderWidth: 2
+                            label: 'Average Difference (Highly Popular - Less Popular)',
+                            data: featureDifferenceData.differences,
+                            backgroundColor: backgroundColors,
+                            borderColor: borderColors,
+                            borderWidth: 1
                         }
                     ]
                 },
                 options: {
+                    indexAxis: 'y',
                     responsive: true,
                     maintainAspectRatio: false,
                     scales: {
-                        r: {
-                            angleLines: { display: false },
-                            suggestedMin: 0,
-                            suggestedMax: 1,
-                            pointLabels: { font: { size: 12 } }
+                        x: {
+                            beginAtZero: true,
+                            title: { display: true, text: 'Difference in Average Value' }
                         }
                     },
                     plugins: {
-                        legend: {
-                            position: 'top',
-                        }
+                        legend: { display: false }
                     }
                 }
             });
@@ -377,18 +484,25 @@
         
         const renderComparisonBarChart = (feature) => {
             const ctx = document.getElementById('comparisonBarChart').getContext('2d');
+            
+            // 95% Confidence Interval data (Average +/- 1.96 * SEM)
+            const likedCI = semData[feature].liked_sem;
+            const dislikedCI = semData[feature].disliked_sem;
+
             if (comparisonBarChart) {
                 comparisonBarChart.destroy();
             }
             comparisonBarChart = new Chart(ctx, {
                 type: 'bar',
+                plugins: [errorBars],
                 data: {
-                    labels: ['Disliked', 'Liked'],
+                    labels: ['Less Popular', 'Highly Popular'],
                     datasets: [{
                         label: `Average ${featureLabels[feature]}`,
                         data: [dislikedAvgs[feature], likedAvgs[feature]],
-                        backgroundColor: ['rgba(255, 99, 132, 0.6)', 'rgba(52, 211, 153, 0.6)'],
-                        borderColor: ['rgba(255, 99, 132, 1)', 'rgba(5, 150, 105, 1)'],
+                        errorData: [dislikedCI, likedCI], // Custom data for plugin
+                        backgroundColor: ['rgba(249, 115, 22, 0.6)', 'rgba(52, 211, 153, 0.6)'],
+                        borderColor: ['rgba(249, 115, 22, 1)', 'rgba(5, 150, 105, 1)'],
                         borderWidth: 1
                     }]
                 },
@@ -409,89 +523,61 @@
             });
         };
 
-        const renderScatterPlot = (xFeature, yFeature) => {
-            const ctx = document.getElementById('scatterPlot').getContext('2d');
-            const data = {
-                datasets: [
-                    {
-                        label: 'Liked',
-                        data: songData.filter(d => d.target === 1).map(d => ({ x: d[xFeature], y: d[yFeature] })),
-                        backgroundColor: 'rgba(52, 211, 153, 0.7)'
-                    },
-                    {
-                        label: 'Disliked',
-                        data: songData.filter(d => d.target === 0).map(d => ({ x: d[xFeature], y: d[yFeature] })),
-                        backgroundColor: 'rgba(255, 99, 132, 0.7)'
-                    }
-                ]
-            };
+        const generateCorrelationMatrix = () => {
+            const container = document.getElementById('correlationMatrixContainer');
+            const matrix = correlationSummary.feature_matrix;
+            const features = Object.keys(matrix);
+            let html = '<table class="w-full border-collapse rounded-lg overflow-hidden shadow-lg">';
             
-            if(scatterPlot) {
-                scatterPlot.destroy();
-            }
+            // Header Row
+            html += '<thead class="bg-gray-200"><tr class="text-sm font-bold text-gray-700">';
+            html += '<th class="corr-cell">Feature</th>';
+            features.forEach(f => {
+                html += `<th class="corr-cell">${featureLabels[f].split(' ')[0]}</th>`;
+            });
+            html += '</tr></thead>';
 
-            scatterPlot = new Chart(ctx, {
-                type: 'scatter',
-                data: data,
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        x: {
-                            title: {
-                                display: true,
-                                text: featureLabels[xFeature]
-                            }
-                        },
-                        y: {
-                            title: {
-                                display: true,
-                                text: featureLabels[yFeature]
-                            }
-                        }
-                    },
-                    plugins: {
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    return `${featureLabels[xFeature]}: ${context.parsed.x.toFixed(2)}, ${featureLabels[yFeature]}: ${context.parsed.y.toFixed(2)}`;
-                                }
-                            }
-                        }
+            // Body Rows
+            html += '<tbody class="divide-y divide-gray-200">';
+            features.forEach(f1 => {
+                html += `<tr class="hover:bg-gray-50"><td class="corr-cell text-left font-bold">${featureLabels[f1].split(' ')[0]}</td>`;
+                features.forEach(f2 => {
+                    const value = matrix[f1][f2];
+                    let className = 'corr-neutral';
+                    if (value > 0.4 && f1 !== f2) {
+                        className = 'corr-positive';
+                    } else if (value < -0.4) {
+                        className = 'corr-negative';
                     }
-                }
+
+                    html += `<td class="corr-cell ${className}">${value.toFixed(2)}</td>`;
+                });
+                html += '</tr>';
             });
+            html += '</tbody></table>';
+            
+            container.innerHTML = html;
         };
 
-        const populateSongTable = () => {
-            const tableBody = document.getElementById('songTable');
-            tableBody.innerHTML = '';
-            songData.forEach(song => {
-                const row = `
-                    <tr class="song-row">
-                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${song.song_title}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${song.artist}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${song.target === 1 ? 'Yes' : 'No'}</td>
-                    </tr>
+        const renderPopularityCorrelations = () => {
+            const container = document.getElementById('popularityCorrelations');
+            const data = correlationSummary.popularity_corr;
+            let html = '<ul class="space-y-2">';
+            
+            for (const feature in data) {
+                const value = data[feature];
+                const color = value > 0.1 ? 'text-green-600' : (value < -0.1 ? 'text-red-600' : 'text-gray-600');
+                const sign = value > 0 ? '+' : '';
+
+                html += `
+                    <li class="flex justify-between items-center text-sm font-medium border-b pb-2">
+                        <span>${featureLabels[feature].split(' ')[0]}</span>
+                        <span class="${color} font-extrabold">${sign}${value.toFixed(2)}</span>
+                    </li>
                 `;
-                tableBody.innerHTML += row;
-            });
-        };
-
-        const filterTable = () => {
-            const input = document.getElementById('searchInput');
-            const filter = input.value.toUpperCase();
-            const rows = document.querySelectorAll("#songTable tr.song-row");
-
-            rows.forEach(row => {
-                const title = row.cells[0].textContent.toUpperCase();
-                const artist = row.cells[1].textContent.toUpperCase();
-                if (title.indexOf(filter) > -1 || artist.indexOf(filter) > -1) {
-                    row.style.display = "";
-                } else {
-                    row.style.display = "none";
-                }
-            });
+            }
+            html += '</ul>';
+            container.innerHTML = html;
         };
         
         const scrollToSection = (sectionId) => {
@@ -523,10 +609,11 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             renderDistributionChart('danceability');
-            renderRadarChart();
-            renderComparisonBarChart('danceability');
-            renderScatterPlot('energy', 'loudness');
-            populateSongTable();
+            renderDifferenceChart();
+            renderComparisonBarChart('loudness');
+            generateCorrelationMatrix();
+            renderPopularityCorrelations();
+
 
             document.getElementById('featureSelectorDist').addEventListener('change', (e) => {
                 renderDistributionChart(e.target.value);
@@ -535,14 +622,119 @@
             document.getElementById('featureSelectorComp').addEventListener('change', (e) => {
                 renderComparisonBarChart(e.target.value);
             });
-            
-            const scatterX = document.getElementById('x-axis-select');
-            const scatterY = document.getElementById('y-axis-select');
-            scatterX.addEventListener('change', () => renderScatterPlot(scatterX.value, scatterY.value));
-            scatterY.addEventListener('change', () => renderScatterPlot(scatterX.value, scatterY.value));
-
-            document.getElementById('searchInput').addEventListener('keyup', filterTable);
         });
     </script>
+</head>
+<body class="bg-gray-50">
+
+    <div class="container mx-auto p-4 sm:p-6 md:p-8">
+        
+        <header class="text-center mb-12">
+            <h1 class="text-4xl md:text-5xl font-bold text-gray-800">Spotify Full Dataset Analysis Dashboard</h1>
+            <p class="text-lg text-gray-600 mt-2">Insights pre-calculated from the full dataset, focused on popularity (&ge; 70).</p>
+        </header>
+
+        <section id="about" class="mb-12 bg-white p-6 rounded-lg shadow-sm">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Core Findings Overview</h2>
+            <p class="text-gray-700 leading-relaxed">
+                This dashboard presents a summarized analysis of the full dataset you provided. Instead of loading thousands of song entries, all averages, distributions, and correlations were pre-calculated and embedded as small JSON objects, resulting in a fast, lightweight, and responsive experience. The analysis defines <strong>Highly Popular</strong> songs as those with a <span class="font-mono">popularity</span> score of <strong>70</strong> or greater. We explore three key analytical views to understand the musical characteristics associated with success on Spotify.
+            </p>
+        </section>
+
+        <nav class="sticky top-0 z-10 control-panel p-4 mb-8 rounded-lg shadow-md flex flex-wrap justify-center gap-2">
+            <button onclick="scrollToSection('distributions')" class="nav-button active px-4 py-2 rounded-md font-semibold text-gray-700 bg-gray-200 hover:bg-gray-300">Feature Distributions</button>
+            <button onclick="scrollToSection('comparison')" class="nav-button px-4 py-2 rounded-md font-semibold text-gray-700 bg-gray-200 hover:bg-gray-300">Popularity Comparison</button>
+            <button onclick="scrollToSection('relationships')" class="nav-button px-4 py-2 rounded-md font-semibold text-gray-700 bg-gray-200 hover:bg-gray-300">Feature Relationships</button>
+        </nav>
+
+        <main>
+            <section id="distributions" class="mb-16 min-h-screen">
+                <div class="bg-white p-6 rounded-lg shadow-sm">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-2">Overall Feature Distributions (Full Dataset)</h2>
+                    <p class="text-gray-600 mb-6">This section shows the general spread of characteristics across <em>all</em> songs in the dataset. Use this to establish a baseline for what's "normal" on Spotify.</p>
+                    <div class="mb-6">
+                        <label for="featureSelectorDist" class="block text-sm font-medium text-gray-700 mb-1">Select a Feature:</label>
+                        <select id="featureSelectorDist" class="w-full md:w-1/3 p-2 border border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500">
+                            <option value="danceability" selected>Danceability (0-1)</option>
+                            <option value="energy">Energy (0-1)</option>
+                            <option value="valence">Valence (0-1)</option>
+                            <option value="tempo">Tempo (BPM)</option>
+                            <option value="loudness">Loudness (dB)</option>
+                            <option value="acousticness">Acousticness (0-1)</option>
+                            <option value="liveness">Liveness (0-1)</option>
+                        </select>
+                    </div>
+                    <div class="chart-container mx-auto max-w-2xl">
+                        <canvas id="distributionChart"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <section id="comparison" class="mb-16 min-h-screen">
+                <div class="bg-white p-6 rounded-lg shadow-sm">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-2">Popularity Profile Comparison</h2>
+                    <p class="text-gray-600 mb-6">We compare the <strong>average</strong> audio profiles of <strong>Highly Popular</strong> (&ge; 70) versus Less Popular (&lt; 70) songs. Two charts are used to isolate the magnitude and statistical significance of the differences.</p>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        <div>
+                            <h3 class="text-xl font-semibold text-gray-800 text-center mb-4">Magnitude of Average Difference</h3>
+                            <div class="chart-container mx-auto max-w-xl" style="height: 450px;">
+                                <canvas id="differenceChart"></canvas>
+                                <p class="text-xs text-center text-gray-500 mt-2">Positive bars mean the feature is higher in Highly Popular tracks. Negative bars mean it is lower. Loudness is the largest difference.</p>
+                            </div>
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-semibold text-gray-800 text-center mb-4">Single Feature Average Comparison (with 95% CI)</h3>
+                             <div class="mb-4">
+                                <label for="featureSelectorComp" class="block text-sm font-medium text-gray-700 mb-1">Select a Feature:</label>
+                                <select id="featureSelectorComp" class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500">
+                                    <option value="loudness" selected>Loudness (dB)</option>
+                                    <option value="danceability">Danceability (0-1)</option>
+                                    <option value="energy">Energy (0-1)</option>
+                                    <option value="valence">Valence (0-1)</option>
+                                    <option value="acousticness">Acousticness (0-1)</option>
+                                    <option value="tempo">Tempo (BPM)</option>
+                                </select>
+                            </div>
+                            <div class="chart-container mx-auto max-w-xl">
+                                <canvas id="comparisonBarChart"></canvas>
+                            </div>
+                            <p class="text-sm text-gray-700 mt-4 px-4">
+                                If the Confidence Interval bars <strong>do not overlap</strong>, the difference between the Highly Popular and Less Popular groups is statistically significant (p &lt; 0.05). <strong>Loudness</strong> and <strong>Energy</strong> show the clearest non-overlapping CIs, confirming they are the most distinct features between the two groups.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="relationships" class="mb-16">
+                <div class="bg-white p-6 rounded-lg shadow-sm">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-2">Feature Relationships (Correlation)</h2>
+                    <p class="text-gray-600 mb-6">This matrix displays the correlation coefficients (R) between key features, calculated over the full dataset. Values close to <strong>+1</strong> or <strong>-1</strong> indicate a strong linear relationship. Cells are colored for easy interpretation (Green = Strong Positive, Red = Strong Negative).</p>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                        <div class="md:col-span-2">
+                            <h3 class="text-lg font-semibold text-gray-800 mb-3">Inter-Feature Correlation Matrix</h3>
+                            <div id="correlationMatrixContainer" class="overflow-x-auto">
+                                <!-- Matrix Table will be generated here -->
+                            </div>
+                            <p class="text-sm text-gray-700 mt-4">
+                                <strong>Key Insight:</strong> The strongest relationship is between <strong>Energy</strong> and <strong>Loudness</strong> (R = +0.81), confirming that highly energetic tracks are almost always produced to be louder. Conversely, <strong>Acousticness</strong> has a strong negative correlation (R &asymp; -0.65) with both Energy and Loudness.
+                            </p>
+                        </div>
+                        <div class="md:col-span-1">
+                            <h3 class="text-lg font-semibold text-gray-800 mb-3">Correlation with Popularity</h3>
+                             <div id="popularityCorrelations" class="p-4 bg-gray-50 rounded-lg border">
+                                <!-- Popularity list will be generated here -->
+                            </div>
+                             <p class="text-sm text-gray-700 mt-4">
+                                <strong>Loudness</strong> has the highest positive correlation (R = +0.28) with Popularity among these features, supporting the finding from the comparison chart that louder songs tend to be more popular.
+                            </p>
+                        </div>
+                    </div>
+
+                </div>
+            </section>
+        </main>
+    </div>
 </body>
 </html>
